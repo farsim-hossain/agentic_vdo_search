@@ -275,7 +275,7 @@ if temp_video_path and Path(temp_video_path).exists():
                             header, data = b64_str.split(",")
                             img_bytes = base64.b64decode(data)
                             img = Image.open(io.BytesIO(img_bytes))
-                            st.image(img, use_column_width=True)
+                            st.image(img, use_container_width=True)
                         except Exception as e:
                             st.error(f"Error rendering storyboard: {e}")
                     st.markdown("<br>", unsafe_allow_html=True)
