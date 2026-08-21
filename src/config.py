@@ -10,10 +10,10 @@ class Settings(BaseSettings):
         extra="ignore"
     )
 
-    # Groq API Configuration
+    # Groq API Configuration (supports GROQ_VLM_MODEL or GROQ_VLM)
     groq_api_key: str = Field(default="", env="GROQ_API_KEY")
-    groq_vlm_model: str = Field(default="qwen/qwen3.6-27b", env="GROQ_VLM_MODEL")
-    groq_text_model: str = Field(default="qwen/qwen3.6-27b", env="GROQ_TEXT_MODEL")
+    groq_vlm_model: str = Field(default="qwen/qwen3.6-27b")
+    groq_text_model: str = Field(default="qwen/qwen3.6-27b")
     
     # Rate Limiting
     vlm_min_request_interval: float = Field(default=60.0, description="Minimum seconds between Groq VLM API requests")
@@ -26,6 +26,16 @@ class Settings(BaseSettings):
     # Storage Paths
     db_path: Path = Field(default=Path("video_index.db"), description="SQLite database path for index and VLM cache")
     cache_dir: Path = Field(default=Path(".cache_storyboards"), description="Directory for storyboard contact sheet thumbnails")
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        # Check env aliases for GROQ_VLM / GROQ_VLM_MODEL
+        env_vlm = os.getenv("GROQ_VLM_MODEL") or os.getenv("GROQ_VLM")
+        if env_vlm:
+            self.groq_vlm_model = env_vlm
+        env_text = os.getenv("GROQ_TEXT_MODEL") or os.getenv("GROQ_TEXT") or self.groq_vlm_model
+        if env_text:
+            self.groq_text_model = env_text
 
 settings = Settings()
 
