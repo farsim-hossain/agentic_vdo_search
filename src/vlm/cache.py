@@ -38,10 +38,16 @@ class VLMCache:
             row = cursor.fetchone()
             if not row:
                 return None
+            
+            parsed = json.loads(row["raw_json"])
+            # Reject cached fallback error JSON so fresh analysis is performed
+            if any("error" in ev for ev in parsed.get("events", [])):
+                return None
+
             return {
                 "shot_id": row["shot_id"],
                 "video_id": row["video_id"],
-                "raw_json": json.loads(row["raw_json"]),
+                "raw_json": parsed,
                 "summary_text": row["summary_text"],
                 "created_at": row["created_at"]
             }
@@ -82,13 +88,19 @@ class VLMCache:
             vec_bytes = row["text_vector"]
             if not vec_bytes:
                 continue
+            
+            parsed = json.loads(row["raw_json"])
+            # Skip cached error fallbacks
+            if any("error" in ev for ev in parsed.get("events", [])):
+                continue
+
             doc_vec = np.frombuffer(vec_bytes, dtype=np.float32)
             sim = embed_engine.cosine_similarity(query_vec, doc_vec)
 
             obs_data = {
                 "shot_id": row["shot_id"],
                 "video_id": row["video_id"],
-                "raw_json": json.loads(row["raw_json"]),
+                "raw_json": parsed,
                 "summary_text": row["summary_text"],
             }
             results.append((obs_data, sim))

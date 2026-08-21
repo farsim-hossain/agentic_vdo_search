@@ -33,3 +33,5 @@ tmp/
 .DS_Store
 .idea/
 .vscode/
+
+input_vdo/

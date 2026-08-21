@@ -116,22 +116,52 @@ st.markdown("""
         color: #0f172a !important;
     }
 
-    /* Tab styling */
+    /* Tab styling - Black Tab Buttons */
     .stTabs [data-baseweb="tab-list"] {
         gap: 8px;
         border-bottom: 2px solid #e2e8f0;
     }
-    .stTabs [data-baseweb="tab"] {
+    .stTabs [data-baseweb="tab"], button[data-baseweb="tab"], div[data-testid="stTab"] {
         height: 48px;
         white-space: pre;
         border-radius: 6px 6px 0 0;
-        font-weight: 600;
+        font-weight: 700 !important;
         font-size: 0.95rem;
-        color: #475569 !important;
+        color: #000000 !important;
     }
-    .stTabs [aria-selected="true"] {
-        color: #2563eb !important;
-        border-bottom: 3px solid #2563eb !important;
+    .stTabs [data-baseweb="tab"] *, button[data-baseweb="tab"] *, div[data-testid="stTab"] * {
+        color: #000000 !important;
+        font-weight: 700 !important;
+    }
+    .stTabs [aria-selected="true"], button[data-baseweb="tab"][aria-selected="true"], div[data-testid="stTab"][data-selected="true"] {
+        color: #000000 !important;
+        border-bottom: 3px solid #000000 !important;
+        background-color: #f1f5f9 !important;
+    }
+    .stTabs [aria-selected="true"] *, div[data-testid="stTab"][data-selected="true"] * {
+        color: #000000 !important;
+    }
+
+    /* Expander & Detailed Evidence - Black Text Rules */
+    div[data-testid="stExpander"] {
+        background-color: #ffffff !important;
+        border: 1px solid #cbd5e1 !important;
+        border-radius: 8px !important;
+    }
+    div[data-testid="stExpander"] summary, div[data-testid="stExpander"] summary * {
+        color: #000000 !important;
+        font-weight: 700 !important;
+    }
+    div[data-testid="stExpander"] div[data-testid="stMarkdownContainer"] *,
+    div[data-testid="stExpander"] div[data-testid="stCaptionContainer"] *,
+    div[data-testid="stExpander"] p,
+    div[data-testid="stExpander"] strong,
+    div[data-testid="stExpander"] span {
+        color: #000000 !important;
+    }
+    div[data-testid="stCaptionContainer"], div[data-testid="stCaptionContainer"] p {
+        color: #000000 !important;
+        font-weight: 600 !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -210,7 +240,7 @@ if temp_video_path and Path(temp_video_path).exists():
             st.markdown(f'<div class="metric-card"><div class="metric-val" style="color:{"#16a34a" if shot_count > 0 else "#ea580c"}">{status_text}</div><div class="metric-lbl">Status</div></div>', unsafe_allow_html=True)
 
         st.markdown("<br>", unsafe_allow_html=True)
-        if st.button("⚡ Process & Index Media", use_container_width=True, type="secondary"):
+        if st.button("⚡ Process & Index Media", width="stretch", type="secondary"):
             with st.spinner("Processing video shots, extracting keyframes & indexing visual vectors..."):
                 def log_status(msg):
                     st.toast(msg, icon="ℹ️")
@@ -229,7 +259,7 @@ if temp_video_path and Path(temp_video_path).exists():
         with q_col1:
             user_query = st.text_input("Natural Language Query:", placeholder="e.g. Describe what happened between 5 seconds to 15 seconds...", label_visibility="collapsed")
         with q_col2:
-            run_btn = st.button("Run Analytics", use_container_width=True, type="primary")
+            run_btn = st.button("Run Analytics", width="stretch", type="primary")
 
         if run_btn and user_query.strip():
             with st.spinner("Executing multimodal vector search & synthesizing intelligence..."):
@@ -275,7 +305,7 @@ if temp_video_path and Path(temp_video_path).exists():
                             header, data = b64_str.split(",")
                             img_bytes = base64.b64decode(data)
                             img = Image.open(io.BytesIO(img_bytes))
-                            st.image(img, use_container_width=True)
+                            st.image(img, width="stretch")
                         except Exception as e:
                             st.error(f"Error rendering storyboard: {e}")
                     st.markdown("<br>", unsafe_allow_html=True)

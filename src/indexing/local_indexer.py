@@ -8,6 +8,42 @@ from src.config import settings
 from src.video.processor import SceneShot, Keyframe, VideoProcessor
 from src.indexing.embeddings import EmbeddingEngine
 
+def parse_query_timestamp_range(query_text: str, video_duration: float = 0.0) -> Optional[Tuple[float, float]]:
+    """Parse target timestamp seconds range from natural language queries."""
+    # 1. Match HH:MM:SS or MM:SS patterns (e.g. 00:00:16 to 00:00:25)
+    hhmmss = re.findall(r'\b(?:\d{1,2}:)?\d{2}:\d{2}\b', query_text)
+    if len(hhmmss) >= 1:
+        secs = []
+        for ts in hhmmss:
+            parts = [int(p) for p in ts.split(':')]
+            if len(parts) == 3:
+                secs.append(parts[0]*3600 + parts[1]*60 + parts[2])
+            elif len(parts) == 2:
+                secs.append(parts[0]*60 + parts[1])
+        if len(secs) == 1:
+            return (float(secs[0]), float(secs[0]))
+        return (float(min(secs)), float(max(secs)))
+
+    # 2. Match float/int numbers (e.g. "between 16 to 25 seconds" or "0.16 to 0.25")
+    nums = [float(n) for n in re.findall(r'\b\d+(?:\.\d+)?\b', query_text)]
+    if not nums:
+        return None
+
+    # Handle decimal notation like 0.16 to 0.25 when video length > 10s
+    if video_duration > 10.0:
+        scaled_nums = []
+        for n in nums:
+            if 0.0 < n < 1.0:
+                scaled_nums.append(n * 100.0)
+            else:
+                scaled_nums.append(n)
+        nums = scaled_nums
+
+    if len(nums) == 1:
+        return (nums[0], nums[0])
+    
+    return (min(nums), max(nums))
+
 class LocalIndexer:
     def __init__(self, db_path: Optional[Path] = None):
         self.db_path = db_path or settings.db_path
@@ -144,15 +180,18 @@ class LocalIndexer:
         return video_id
 
     def search_shots(self, video_id: str, query_text: str, top_k: int = 3) -> List[Tuple[Dict[str, Any], float]]:
-        """Perform vector cosine similarity search and timestamp matching of query_text against video shots."""
+        """Perform vector cosine similarity search and timestamp range matching of query_text against video shots."""
         embed_engine = EmbeddingEngine.get_instance()
         query_vector = embed_engine.embed_clip_text(query_text)
 
-        # Parse timestamp numbers from query (e.g. "0.15 to 0.25 seconds" or "15 to 25 seconds")
-        target_seconds = [float(num) for num in re.findall(r'\b\d+(?:\.\d+)?\b', query_text)]
-
+        duration = 0.0
         with self._get_conn() as conn:
             cursor = conn.cursor()
+            cursor.execute("SELECT duration_sec FROM videos WHERE video_id = ?", (video_id,))
+            v_row = cursor.fetchone()
+            if v_row and v_row["duration_sec"]:
+                duration = v_row["duration_sec"]
+
             cursor.execute(
                 """
                 SELECT k.shot_id, k.clip_vector, k.timestamp_str, s.*
@@ -167,6 +206,8 @@ class LocalIndexer:
         if not rows:
             return []
 
+        ts_range = parse_query_timestamp_range(query_text, video_duration=duration)
+
         shot_scores: Dict[str, float] = {}
         shot_data: Dict[str, Dict[str, Any]] = {}
 
@@ -178,18 +219,20 @@ class LocalIndexer:
             kf_vector = np.frombuffer(vector_bytes, dtype=np.float32)
             sim = embed_engine.cosine_similarity(query_vector, kf_vector)
 
-            # Check if query mentions specific seconds matching shot time range
             start_sec = row["start_sec"]
             end_sec = row["end_sec"]
-            for sec in target_seconds:
-                # If target timestamp falls inside shot time window
-                if start_sec <= sec <= end_sec or (abs(sec - start_sec) <= 5.0):
-                    sim += 1.0  # Massive score boost for timestamp match
+
+            # If user specified a timestamp range, boost shots overlapping that range
+            if ts_range:
+                t_start, t_end = ts_range
+                overlap = max(0.0, min(end_sec, t_end) - max(start_sec, t_start))
+                if overlap > 0.0 or (t_start == t_end and start_sec <= t_start <= end_sec):
+                    sim += 5.0  # Priority boost for matching time interval
 
             # Check if query matches local YOLO object tags
             tags = json.loads(row["tags_json"] or "[]")
             if any(q_word.lower() in tag.lower() for q_word in query_text.split() for tag in tags):
-                sim += 0.15  # Boost score if local object tag matches query keyword
+                sim += 0.15
 
             if shot_id not in shot_scores or sim > shot_scores[shot_id]:
                 shot_scores[shot_id] = sim
@@ -205,6 +248,5 @@ class LocalIndexer:
                     "tags": tags,
                 }
 
-        # Sort shots by score descending
         sorted_shots = sorted(shot_scores.items(), key=lambda x: x[1], reverse=True)[:top_k]
         return [(shot_data[s_id], score) for s_id, score in sorted_shots]
