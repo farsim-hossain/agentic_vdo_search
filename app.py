@@ -1,15 +1,18 @@
 import os
+import logging
+
+# Suppress HuggingFace transformers internal docstring warnings & hub warnings
+os.environ["TRANSFORMERS_VERBOSITY"] = "error"
+os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
+logging.getLogger("transformers").setLevel(logging.ERROR)
+
 import tempfile
 import base64
 import io
-import logging
 from pathlib import Path
 import streamlit as st
 from PIL import Image
 from dotenv import load_dotenv
-
-# Suppress verbose library warnings
-logging.getLogger("transformers").setLevel(logging.ERROR)
 
 # Load environment variables
 load_dotenv()
