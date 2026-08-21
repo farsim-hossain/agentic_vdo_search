@@ -4,6 +4,13 @@ An enterprise-grade, agentic multimodal video analytics engine that performs loc
 
 ---
 
+### 💡 TL;DR Plain-English Summary
+
+- **Indexing**: Splits the video into 5-second scene shots, extracts metadata, object tags (YOLO), visual vectors (CLIP), and storyboard image grids, and stores them in SQLite (`video_index.db`).
+- **Answering Queries**: The query goes to an intent & timestamp router. A hybrid SQL & CLIP vector search finds the matching video shot(s), sends those storyboard frames to Groq VLM (`qwen/qwen3.6-27b`), strips out internal thinking traces (`<think>`), and outputs a clean, grounded timestamped answer.
+
+---
+
 ## 🏛️ System Architecture
 
 ```mermaid
