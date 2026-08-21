@@ -1,0 +1,35 @@
+# Python Cache & Compiled Files
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Virtual Environments
+.venv/
+venv/
+env/
+
+# Environment Variables & API Secrets
+.env
+*.env
+
+# SQLite Databases & Local Storage
+*.db
+*.sqlite
+video_index.db
+
+# Cache & Temporary Storyboards
+.cache_storyboards/
+tmp/
+*.tmp
+
+# Media Files (Avoid committing large video files)
+*.mp4
+*.mkv
+*.avi
+*.mov
+
+# OS & IDE Files
+.DS_Store
+.idea/
+.vscode/
