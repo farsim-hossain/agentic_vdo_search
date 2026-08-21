@@ -26,11 +26,24 @@ class EmbeddingEngine:
             cls._instance = cls()
         return cls._instance
 
+    def _extract_tensor(self, outputs) -> torch.Tensor:
+        """Extract feature Tensor from transformers model output."""
+        if isinstance(outputs, torch.Tensor):
+            return outputs
+        if hasattr(outputs, "image_embeds") and outputs.image_embeds is not None:
+            return outputs.image_embeds
+        if hasattr(outputs, "text_embeds") and outputs.text_embeds is not None:
+            return outputs.text_embeds
+        if hasattr(outputs, "pooler_output") and outputs.pooler_output is not None:
+            return outputs.pooler_output
+        return outputs[0]
+
     def embed_image(self, image: Image.Image) -> np.ndarray:
         """Embed PIL Image into a 512-dim normalized float32 CLIP vector."""
         inputs = self.clip_processor(images=image, return_tensors="pt").to(self.device)
         with torch.no_grad():
-            image_features = self.clip_model.get_image_features(**inputs)
+            outputs = self.clip_model.get_image_features(**inputs)
+            image_features = self._extract_tensor(outputs)
             # Normalize vector
             image_features = image_features / image_features.norm(p=2, dim=-1, keepdim=True)
             return image_features.cpu().numpy().flatten().astype(np.float32)
@@ -39,7 +52,8 @@ class EmbeddingEngine:
         """Embed text query into 512-dim normalized float32 CLIP vector space for visual matching."""
         inputs = self.clip_processor(text=[text], return_tensors="pt", padding=True).to(self.device)
         with torch.no_grad():
-            text_features = self.clip_model.get_text_features(**inputs)
+            outputs = self.clip_model.get_text_features(**inputs)
+            text_features = self._extract_tensor(outputs)
             text_features = text_features / text_features.norm(p=2, dim=-1, keepdim=True)
             return text_features.cpu().numpy().flatten().astype(np.float32)
 
