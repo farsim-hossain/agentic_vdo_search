@@ -1,5 +1,6 @@
 import sqlite3
 import json
+import re
 import numpy as np
 from pathlib import Path
 from typing import List, Dict, Any, Tuple, Optional
@@ -143,9 +144,12 @@ class LocalIndexer:
         return video_id
 
     def search_shots(self, video_id: str, query_text: str, top_k: int = 3) -> List[Tuple[Dict[str, Any], float]]:
-        """Perform vector cosine similarity search of query_text against keyframes of a video."""
+        """Perform vector cosine similarity search and timestamp matching of query_text against video shots."""
         embed_engine = EmbeddingEngine.get_instance()
         query_vector = embed_engine.embed_clip_text(query_text)
+
+        # Parse timestamp numbers from query (e.g. "0.15 to 0.25 seconds" or "15 to 25 seconds")
+        target_seconds = [float(num) for num in re.findall(r'\b\d+(?:\.\d+)?\b', query_text)]
 
         with self._get_conn() as conn:
             cursor = conn.cursor()
@@ -173,6 +177,14 @@ class LocalIndexer:
                 continue
             kf_vector = np.frombuffer(vector_bytes, dtype=np.float32)
             sim = embed_engine.cosine_similarity(query_vector, kf_vector)
+
+            # Check if query mentions specific seconds matching shot time range
+            start_sec = row["start_sec"]
+            end_sec = row["end_sec"]
+            for sec in target_seconds:
+                # If target timestamp falls inside shot time window
+                if start_sec <= sec <= end_sec or (abs(sec - start_sec) <= 5.0):
+                    sim += 1.0  # Massive score boost for timestamp match
 
             # Check if query matches local YOLO object tags
             tags = json.loads(row["tags_json"] or "[]")

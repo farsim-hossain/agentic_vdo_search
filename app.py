@@ -2,10 +2,14 @@ import os
 import tempfile
 import base64
 import io
+import logging
 from pathlib import Path
 import streamlit as st
 from PIL import Image
 from dotenv import load_dotenv
+
+# Suppress verbose library warnings
+logging.getLogger("transformers").setLevel(logging.ERROR)
 
 # Load environment variables
 load_dotenv()
@@ -21,7 +25,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Professional Enterprise Styling (Slate & Navy Minimalist Theme)
+# Professional Enterprise Styling with High Text Contrast Rules
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
@@ -39,7 +43,7 @@ st.markdown("""
         background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
         padding: 2rem 2.5rem;
         border-radius: 12px;
-        color: #ffffff;
+        color: #ffffff !important;
         margin-bottom: 2rem;
         box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
     }
@@ -49,20 +53,20 @@ st.markdown("""
         font-weight: 700;
         letter-spacing: -0.02em;
         margin: 0;
-        color: #ffffff;
+        color: #ffffff !important;
     }
     
     .header-subtitle {
         font-size: 1.0rem;
-        color: #94a3b8;
+        color: #94a3b8 !important;
         margin-top: 0.4rem;
         font-weight: 400;
     }
 
     /* Metric Cards */
     .metric-card {
-        background: #ffffff;
-        border: 1px solid #e2e8f0;
+        background: #ffffff !important;
+        border: 1px solid #cbd5e1;
         border-radius: 8px;
         padding: 1rem 1.25rem;
         text-align: center;
@@ -71,11 +75,11 @@ st.markdown("""
     .metric-val {
         font-size: 1.6rem;
         font-weight: 700;
-        color: #0f172a;
+        color: #0f172a !important;
     }
     .metric-lbl {
         font-size: 0.825rem;
-        color: #64748b;
+        color: #475569 !important;
         text-transform: uppercase;
         letter-spacing: 0.05em;
         margin-top: 0.2rem;
@@ -83,24 +87,30 @@ st.markdown("""
 
     /* Timestamp Tag */
     .ts-tag {
-        background-color: #f1f5f9;
-        color: #0f172a;
-        font-weight: 600;
+        background-color: #e2e8f0 !important;
+        color: #0f172a !important;
+        font-weight: 700;
         font-size: 0.85rem;
         padding: 3px 8px;
         border-radius: 4px;
-        border: 1px solid #cbd5e1;
+        border: 1px solid #94a3b8;
         font-family: monospace;
     }
 
-    /* Clean Card */
+    /* Clean High-Contrast Cards */
     .content-card {
-        background: #ffffff;
-        border: 1px solid #e2e8f0;
+        background-color: #ffffff !important;
+        color: #0f172a !important;
+        border: 1px solid #cbd5e1;
         border-radius: 10px;
         padding: 1.5rem;
         margin-bottom: 1rem;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+        font-size: 1.0rem;
+        line-height: 1.6;
+    }
+    .content-card p, .content-card div, .content-card span, .content-card li {
+        color: #0f172a !important;
     }
 
     /* Tab styling */
@@ -114,7 +124,7 @@ st.markdown("""
         border-radius: 6px 6px 0 0;
         font-weight: 600;
         font-size: 0.95rem;
-        color: #64748b;
+        color: #475569 !important;
     }
     .stTabs [aria-selected="true"] {
         color: #2563eb !important;
@@ -214,7 +224,7 @@ if temp_video_path and Path(temp_video_path).exists():
         st.markdown("<br>", unsafe_allow_html=True)
         q_col1, q_col2 = st.columns([3.5, 1])
         with q_col1:
-            user_query = st.text_input("Natural Language Query:", placeholder="e.g. Describe the sequence of events or specific objects visible...", label_visibility="collapsed")
+            user_query = st.text_input("Natural Language Query:", placeholder="e.g. Describe what happened between 5 seconds to 15 seconds...", label_visibility="collapsed")
         with q_col2:
             run_btn = st.button("Run Analytics", use_container_width=True, type="primary")
 
@@ -224,7 +234,8 @@ if temp_video_path and Path(temp_video_path).exists():
 
             st.markdown("<br>", unsafe_allow_html=True)
             st.markdown("##### Analysis Result")
-            st.markdown(f'<div class="content-card">{result.get("answer", "No analysis output generated.")}</div>', unsafe_allow_html=True)
+            ans_content = result.get("answer", "No analysis output generated.")
+            st.markdown(f'<div class="content-card">{ans_content}</div>', unsafe_allow_html=True)
 
             if "observations" in result:
                 with st.expander("Detailed Grounded Evidence", expanded=True):

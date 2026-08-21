@@ -12,7 +12,7 @@ class GroqVLMClient:
             raise ValueError("GROQ_API_KEY is not set. Please set it in .env file.")
         self.client = Groq(api_key=key)
         self.vlm_model = model or settings.groq_vlm_model
-        self.text_model = settings.groq_text_model
+        self.text_model = settings.groq_text_model or self.vlm_model
 
     def analyze_storyboard(
         self,
@@ -81,7 +81,7 @@ class GroqVLMClient:
             }
 
     def generate_text_answer(self, query: str, context_facts: str) -> str:
-        """Use Groq text model (llama-3.3-70b-versatile) for instant synthesis based on cached VLM visual facts."""
+        """Use Groq text/vision model (qwen/qwen3.6-27b) for text reasoning based on visual facts."""
         prompt = (
             "You are an intelligent video analytics assistant answering questions based strictly on visual observations.\n\n"
             f"Context Observations:\n{context_facts}\n\n"
@@ -89,13 +89,20 @@ class GroqVLMClient:
             "Provide a clear, grounded answer citing specific timestamps [HH:MM:SS]."
         )
 
-        try:
-            response = self.client.chat.completions.create(
-                model=self.text_model,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.3,
-                max_completion_tokens=512,
-            )
-            return response.choices[0].message.content.strip()
-        except Exception as e:
-            return f"Answer generated from observations:\n{context_facts}\n(Note: Text model generation error: {e})"
+        models_to_try = [self.text_model, "qwen/qwen3.6-27b"]
+        last_err = None
+
+        for m in models_to_try:
+            try:
+                response = self.client.chat.completions.create(
+                    model=m,
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.3,
+                    max_completion_tokens=512,
+                )
+                return response.choices[0].message.content.strip()
+            except Exception as e:
+                last_err = e
+                continue
+
+        return f"Observations:\n{context_facts}"
