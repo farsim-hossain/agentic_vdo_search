@@ -17,6 +17,10 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
+import importlib
+import sys
+import src.agent.router
+importlib.reload(src.agent.router)
 from src.agent.router import AgenticRouter
 from src.video.processor import VideoProcessor
 
@@ -200,6 +204,14 @@ else:
         st.sidebar.error(f"Path invalid or file missing: {path_input}")
 
 st.sidebar.markdown("---")
+st.sidebar.markdown("### 🧠 Analytics Engine Mode")
+engine_mode = st.sidebar.radio(
+    "Select Intelligence Mode:",
+    ["⚡ Zero-LLM Mode ($0 Cost, Instant CPU)", "🌐 Groq VLM Cloud Mode"],
+    index=0
+)
+
+st.sidebar.markdown("---")
 if st.sidebar.button("🗑️ Purge & Reset DB Cache", width="stretch"):
     import sqlite3
     conn = sqlite3.connect("video_index.db")
@@ -276,7 +288,8 @@ if temp_video_path and Path(temp_video_path).exists():
 
         if run_btn and user_query.strip():
             with st.spinner("Executing multimodal vector search & synthesizing intelligence..."):
-                result = router.answer_query(temp_video_path, user_query)
+                selected_mode = "zero_llm" if "Zero-LLM" in engine_mode else "groq_vlm"
+                result = router.answer_query(temp_video_path, user_query, mode=selected_mode)
 
             st.markdown("<br>", unsafe_allow_html=True)
             st.markdown("##### Analysis Result")
@@ -347,7 +360,8 @@ if temp_video_path and Path(temp_video_path).exists():
         st.markdown("<br>", unsafe_allow_html=True)
         if st.button("Generate Narrative Summary", type="primary"):
             with st.spinner("Synthesizing full video narrative..."):
-                summary_text = router.summarize_video(temp_video_path)
+                selected_mode = "zero_llm" if "Zero-LLM" in engine_mode else "groq_vlm"
+                summary_text = router.summarize_video(temp_video_path, mode=selected_mode)
                 st.markdown(f'<div class="content-card">{summary_text}</div>', unsafe_allow_html=True)
 
 else:

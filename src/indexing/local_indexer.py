@@ -236,17 +236,20 @@ class LocalIndexer:
 
             if shot_id not in shot_scores or sim > shot_scores[shot_id]:
                 shot_scores[shot_id] = sim
-                shot_data[shot_id] = {
-                    "shot_id": shot_id,
-                    "video_id": row["video_id"],
-                    "shot_index": row["shot_index"],
-                    "start_sec": row["start_sec"],
-                    "end_sec": row["end_sec"],
-                    "start_ts": row["start_ts"],
-                    "end_ts": row["end_ts"],
-                    "storyboard_b64": row["storyboard_b64"],
-                    "tags": tags,
-                }
+                if shot_id not in shot_data:
+                    shot_data[shot_id] = {
+                        "shot_id": shot_id,
+                        "video_id": row["video_id"],
+                        "shot_index": row["shot_index"],
+                        "start_sec": row["start_sec"],
+                        "end_sec": row["end_sec"],
+                        "start_ts": row["start_ts"],
+                        "end_ts": row["end_ts"],
+                        "storyboard_b64": row["storyboard_b64"],
+                        "tags": tags,
+                        "kf_vectors": []
+                    }
+                shot_data[shot_id]["kf_vectors"].append(kf_vector)
 
         sorted_shots = sorted(shot_scores.items(), key=lambda x: x[1], reverse=True)[:top_k]
         return [(shot_data[s_id], score) for s_id, score in sorted_shots]

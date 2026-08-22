@@ -6,6 +6,7 @@ from src.indexing.local_indexer import LocalIndexer, parse_query_timestamp_range
 from src.vlm.client import GroqVLMClient
 from src.vlm.cache import VLMCache
 from src.llamaindex.index_builder import LlamaVideoIndexBuilder
+from src.agent.local_nlg import LocalNaturalLanguageGenerator
 
 class AgenticRouter:
     def __init__(self, api_key: Optional[str] = None):
@@ -14,6 +15,7 @@ class AgenticRouter:
         self.vlm_client = GroqVLMClient(api_key=api_key)
         self.processor = VideoProcessor()
         self.llama_builder = LlamaVideoIndexBuilder(self.indexer)
+        self.local_nlg = LocalNaturalLanguageGenerator()
 
     def ensure_indexed(self, video_path: str, verbose_callback: Optional[Callable[[str], None]] = None) -> str:
         """Ensure video is ingested and local frame vectors & tags are stored in SQLite."""
@@ -44,9 +46,10 @@ class AgenticRouter:
         self,
         video_path: str,
         query: str,
+        mode: str = "zero_llm",
         verbose_callback: Optional[Callable[[str], None]] = None
     ) -> Dict[str, Any]:
-        """Process user query using LlamaIndex node retrieval, two-tier vector search, and rate-limited Groq VLM."""
+        """Process user query using LlamaIndex node retrieval, two-tier vector search, and optional rate-limited Groq VLM or local $0-cost Zero-LLM NLG."""
         video_id = self.ensure_indexed(video_path, verbose_callback=verbose_callback)
 
         # Direct Routing: Handle global summary intent
@@ -127,6 +130,11 @@ class AgenticRouter:
                 f"LlamaIndex selected {len(candidate_shots)} candidate ImageNode(s) covering target query interval."
             )
 
+        if mode == "zero_llm":
+            if verbose_callback:
+                verbose_callback("Synthesizing grounded natural answer at $0 API cost via Local Zero-LLM Generator...")
+            return self.local_nlg.synthesize_answer(query, candidate_shots)
+
         # Collect facts across candidate shots, making AT MOST 1 new VLM call per query
         combined_facts = []
         combined_events = []
@@ -196,9 +204,16 @@ class AgenticRouter:
             "observations": {"events": combined_events}
         }
 
-    def summarize_video(self, video_path: str, verbose_callback: Optional[Callable[[str], None]] = None) -> str:
-        """Generate a complete video summary from all indexed/cached observations."""
+    def summarize_video(self, video_path: str, mode: str = "zero_llm", verbose_callback: Optional[Callable[[str], None]] = None) -> str:
+        """Generate a complete video summary from indexed shots at $0 cost or via Groq VLM."""
         video_id = self.ensure_indexed(video_path, verbose_callback=verbose_callback)
+
+        if mode == "zero_llm":
+            candidate_shots = self.indexer.search_shots(video_id, "video summary overview main sequence of events", top_k=10)
+            if not candidate_shots:
+                return "No video shots or keyframes were indexed."
+            res = self.local_nlg.synthesize_answer("Summarize the overall video narrative and main sequence of events.", candidate_shots)
+            return res.get("answer", "No summary synthesized.")
 
         with self.cache._get_conn() as conn:
             cursor = conn.cursor()
