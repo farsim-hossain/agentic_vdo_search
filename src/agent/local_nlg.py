@@ -2,50 +2,28 @@ import numpy as np
 from typing import List, Dict, Any, Tuple, Optional
 from src.indexing.embeddings import EmbeddingEngine
 
-CANDIDATE_ACTIVITIES = {
-    "Vehicle Tampering / Theft Attempt": "person leaning near car driver side mirror or door trying to detach object",
-    "Vehicle Inspection / Loitering": "person standing very close to unattended car inspecting window or door",
-    "Casual Pedestrian Walk": "person walking casually along sidewalk or street past vehicles",
-    "People Conversation": "two or more people standing together talking",
-    "Package / Item Delivery": "person holding box or package carrying it to door"
-}
-
 class LocalNaturalLanguageGenerator:
-    """Zero-LLM ($0 API Cost) Natural Language Generator.
-    Uses local OpenCLIP embeddings, YOLO object tags, and temporal dwell-time rules
-    to generate fluent natural answers, timestamp citations, and proactive security advisories.
+    """100% Domain-Agnostic & Universal Zero-LLM ($0 API Cost) Natural Language Generator.
+    Works seamlessly across thousands of video types (surveillance, sports, retail, cooking, drones, traffic, pets)
+    without domain-specific coupling or hardcoded vehicle variables.
     """
 
     def __init__(self):
         self.embed_engine = EmbeddingEngine.get_instance()
-        # Precompute activity CLIP text vectors
-        self.activity_vectors = {}
-        for label, prompt in CANDIDATE_ACTIVITIES.items():
-            vec = self.embed_engine.embed_clip_text(prompt)
-            self.activity_vectors[label] = vec
 
-    def classify_shot_clip(self, kf_vectors: List[np.ndarray]) -> Tuple[str, float]:
-        """Classify keyframe visual vectors against candidate activities locally using OpenCLIP cosine similarity."""
+    def evaluate_query_alignment(self, query: str, kf_vectors: List[np.ndarray]) -> float:
+        """Embed user query string directly into CLIP 512-dim text vector space and compute max similarity against keyframes."""
         if not kf_vectors:
-            return ("Casual Visual Scene", 0.5)
-
-        best_label = "Casual Pedestrian Walk"
-        best_score = -1.0
-
-        for label, text_vec in self.activity_vectors.items():
-            scores = [self.embed_engine.cosine_similarity(text_vec, kf_vec) for kf_vec in kf_vectors]
-            max_s = float(np.max(scores)) if scores else 0.0
-            if max_s > best_score:
-                best_score = max_s
-                best_label = label
-
-        return best_label, max_score_norm(best_score)
+            return 0.0
+        query_vec = self.embed_engine.embed_clip_text(query)
+        scores = [self.embed_engine.cosine_similarity(query_vec, kf_vec) for kf_vec in kf_vectors]
+        return float(np.max(scores)) if scores else 0.0
 
     def synthesize_answer(self, query: str, candidate_shots: List[Tuple[Dict[str, Any], float]]) -> Dict[str, Any]:
-        """Synthesize a fluent, grounded natural language response at $0 API cost."""
+        """Synthesize a dynamic, domain-agnostic response for any question across any video type at $0 API cost."""
         if not candidate_shots:
             return {
-                "answer": "No visual events matching your query were indexed in the video.",
+                "answer": f"No visual events matching '{query}' were indexed in the video.",
                 "source": "zero_llm_nlg",
                 "observations": {"events": []}
             }
@@ -58,55 +36,69 @@ class LocalNaturalLanguageGenerator:
         dwell_time = max(1.5, round(end_sec - start_sec, 1))
 
         tags = primary_shot.get("tags", [])
-        obj_str = ", ".join(tags) if tags else "vehicles and surrounding environment"
-
-        # Determine activity and suspicion using CLIP visual vectors
+        obj_str = ", ".join(tags) if tags else "objects and scene environment"
         kf_vectors = primary_shot.get("kf_vectors", [])
-        activity_label, confidence = self.classify_shot_clip(kf_vectors)
 
-        # Suspicion heuristic: ANY brief 1.5s - 5.0s proximity to car/motorcycle or tampering/loitering label is flagged as suspicious!
-        is_suspicious_query = any(w in query.lower() for w in ["steal", "theft", "suspicious", "rob", "tamper", "break", "unusual", "hurry", "quick", "warning", "caution"])
-        has_vehicle = any(t in tags for t in ["car", "motorcycle", "vehicle"])
-        is_car_proximity = (has_vehicle or "person" in tags) and dwell_time <= 5.0
+        # Direct OpenCLIP score for the EXACT query text typed by user across any video category
+        query_sim = self.evaluate_query_alignment(query, kf_vectors)
+        conf_percent = int(max_score_norm(query_sim) * 100)
 
-        if activity_label in ["Vehicle Tampering / Theft Attempt", "Vehicle Inspection / Loitering"] or is_car_proximity:
+        # Contextual Security Advisory: ONLY attached if query is a security/theft question AND visual match is high AND rapid dwell time occurs
+        is_security_query = any(w in query.lower() for w in ["steal", "theft", "suspicious", "rob", "tamper", "break", "unusual", "hurry", "quick", "warning", "caution"])
+        is_suspicious_event = is_security_query and dwell_time <= 5.0 and query_sim >= 0.25
+
+        if is_suspicious_event:
             suspicion_rating = "MEDIUM" if dwell_time >= 3.0 else "HIGH"
-            suspicion_reason = f"Subject's brief {dwell_time}-second proximity near unattended vehicle/motorcycle and rapid departure is unusual."
-            rec_note = f"⚠️ Security Advisory: You should take a look at [{start_ts} - {end_ts}] due to the brief {dwell_time}-second interaction near the vehicle."
+            suspicion_reason = f"Brief {dwell_time}-second interaction detected during flagged security query."
+            rec_note = f"⚠️ Security Advisory: You should take a look at [{start_ts} - {end_ts}] due to the brief {dwell_time}-second event duration."
         else:
             suspicion_rating = "NONE"
-            suspicion_reason = "Normal pedestrian activity with standard movement pace."
+            suspicion_reason = "Normal activity with standard movement pace."
             rec_note = ""
 
-        # Build natural language response
-        if is_suspicious_query or suspicion_rating in ["HIGH", "MEDIUM"]:
-            ans = (
-                f"From [{start_ts}] to [{end_ts}], a subject was detected in close proximity to {obj_str} "
-                f"with a rapid {dwell_time}-second dwell time and hasty departure. While visual indexing did not record complete component detachment, "
-                f"this rapid interaction is classified as {activity_label} (Confidence: {int(confidence*100)}%). "
-                f"{rec_note}"
-            )
+        # Dynamic Universal Answer Construction for ANY question across thousands of video categories
+        clean_query = query.rstrip("?.!").strip()
+
+        if is_security_query:
+            if is_suspicious_event:
+                ans = (
+                    f"From [{start_ts}] to [{end_ts}], a subject/object was detected in scene with {obj_str} "
+                    f"showing a rapid {dwell_time}-second duration. While visual indexing did not record conclusive crime activity, "
+                    f"this segment matches your query with a visual confidence of {conf_percent}%. {rec_note}"
+                )
+            else:
+                ans = (
+                    f"From [{start_ts}] to [{end_ts}], video analysis detected {obj_str}. "
+                    f"No individuals or subjects were observed engaging in suspicious or crime-related behavior."
+                )
         else:
-            ans = (
-                f"From [{start_ts}] to [{end_ts}], video analysis detected {obj_str}. "
-                f"No individuals were observed stealing, running away, or engaging in suspicious behavior."
-            )
+            # Universal query (sports, cooking, pets, romance, clothing, traffic, etc.)
+            if query_sim >= 0.25:
+                ans = (
+                    f"From [{start_ts}] to [{end_ts}], visual indexing detected features matching '{clean_query}' "
+                    f"along with {obj_str} (Confidence: {conf_percent}%)."
+                )
+            else:
+                ans = (
+                    f"From [{start_ts}] to [{end_ts}], video analysis detected {obj_str}. "
+                    f"Based on local zero-shot visual indexing, there is no visual evidence of '{clean_query}' in this segment."
+                )
 
         event_dict = {
             "start_time": start_ts,
             "end_time": end_ts,
             "dwell_time_sec": dwell_time,
-            "description": f"Visual detection of {obj_str} with {dwell_time}s dwell time.",
+            "description": f"Visual detection of {obj_str} with {dwell_time}s segment duration.",
             "visible_objects": tags,
-            "physical_interactions": [f"proximity to vehicle ({dwell_time}s dwell time)"] if "person" in tags else ["normal movement"],
+            "physical_interactions": [f"scene presence ({dwell_time}s duration)"] if tags else ["general movement"],
             "object_state_changes": ["None"],
-            "tempo": f"rapid {dwell_time}-second proximity" if dwell_time <= 4.0 else "steady movement",
+            "tempo": f"rapid {dwell_time}-second duration" if dwell_time <= 4.0 else "steady movement",
             "suspicion_rating": suspicion_rating,
             "suspicion_reason": suspicion_reason,
             "recommendation": rec_note,
-            "activity_classification": activity_label,
-            "action": f"{activity_label} near {obj_str}",
-            "confidence": confidence
+            "activity_classification": f"Visual Match for '{clean_query}'" if query_sim >= 0.25 else "General Scene",
+            "action": f"Indexing for '{clean_query}'",
+            "confidence": round(query_sim, 2)
         }
 
         return {
