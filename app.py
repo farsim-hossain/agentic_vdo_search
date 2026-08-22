@@ -193,11 +193,24 @@ if input_option == "Upload File":
         tfile.write(uploaded_file.read())
         temp_video_path = tfile.name
 else:
-    path_input = st.sidebar.text_input("Enter Video Path:", value="sample.mp4")
+    path_input = st.sidebar.text_input("Enter Video Path:", value="input_vdo/Stealing095_x264.mp4")
     if path_input and Path(path_input).exists():
         temp_video_path = path_input
     elif path_input:
         st.sidebar.error(f"Path invalid or file missing: {path_input}")
+
+st.sidebar.markdown("---")
+if st.sidebar.button("🗑️ Purge & Reset DB Cache", width="stretch"):
+    import sqlite3
+    conn = sqlite3.connect("video_index.db")
+    conn.execute("DELETE FROM keyframes")
+    conn.execute("DELETE FROM shots")
+    conn.execute("DELETE FROM videos")
+    conn.execute("DELETE FROM vlm_observations")
+    conn.commit()
+    conn.close()
+    st.sidebar.success("Database cache completely purged!")
+    st.rerun()
 
 # Main Content Layout
 if temp_video_path and Path(temp_video_path).exists():
@@ -275,10 +288,29 @@ if temp_video_path and Path(temp_video_path).exists():
                     events = result["observations"].get("events", [])
                     for ev in events:
                         ts = f"<span class='ts-tag'>{ev.get('start_time')} - {ev.get('end_time')}</span>"
+                        desc = ev.get('description') or f"Video segment from {ev.get('start_time')} to {ev.get('end_time')}."
+                        st.markdown(f"{ts} &nbsp; **{desc}**", unsafe_allow_html=True)
+
                         objs = ", ".join(ev.get("visible_objects", []))
-                        st.markdown(f"{ts} &nbsp; **{ev.get('description')}**", unsafe_allow_html=True)
                         if objs:
-                            st.caption(f"Detected Attributes: {objs}")
+                            st.caption(f"Detected Objects: {objs}")
+
+                        interactions = ", ".join(ev.get("physical_interactions", []))
+                        if interactions:
+                            st.caption(f"Physical Interactions: {interactions}")
+
+                        state_changes = ", ".join(ev.get("object_state_changes", []))
+                        if state_changes and state_changes.lower() != "none":
+                            st.caption(f"State Changes: {state_changes}")
+
+                        rating = ev.get("suspicion_rating")
+                        if rating and rating.upper() in ["HIGH", "MEDIUM"]:
+                            st.markdown(f"**Suspicion Rating**: `{rating}` &nbsp; *{ev.get('suspicion_reason', '')}*")
+
+                        rec = ev.get("recommendation")
+                        if rec:
+                            st.warning(f"{rec}")
+
                         st.markdown("---")
 
     # TAB 2: Storyboard Explorer

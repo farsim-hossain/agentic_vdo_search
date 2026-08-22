@@ -152,17 +152,38 @@ class AgenticRouter:
                     verbose_callback=verbose_callback
                 )
                 vlm_calls_made += 1
-                summary_lines = [f"{ev.get('start_time')}-{ev.get('end_time')}: {ev.get('description')}" for ev in raw_json.get("events", [])]
+                facts_text_list = []
+                for ev in raw_json.get("events", []):
+                    line = f"{ev.get('start_time')}-{ev.get('end_time')}: {ev.get('description', '')}"
+                    if ev.get("physical_interactions"):
+                        line += f" (Interactions: {', '.join(ev.get('physical_interactions'))})"
+                    if ev.get("suspicion_rating") and ev.get("suspicion_rating") != "NONE":
+                        line += f" [Suspicion: {ev.get('suspicion_rating')} - {ev.get('suspicion_reason', '')}]"
+                    if ev.get("recommendation"):
+                        line += f" [{ev.get('recommendation')}]"
+                    facts_text_list.append(line)
+
                 self.cache.save_observation(
                     shot_id=s_id,
                     video_id=video_id,
                     raw_json_data=raw_json,
-                    summary_text=" ".join(summary_lines)
+                    summary_text=" ".join(facts_text_list)
                 )
 
             for ev in raw_json.get("events", []):
                 combined_events.append(ev)
-                combined_facts.append(f"[{ev.get('start_time')}-{ev.get('end_time')}] {ev.get('description')}")
+                fact_line = f"[{ev.get('start_time')}-{ev.get('end_time')}] Description: {ev.get('description', '')}"
+                if ev.get("physical_interactions"):
+                    fact_line += f" | Interactions: {', '.join(ev.get('physical_interactions'))}"
+                if ev.get("object_state_changes"):
+                    fact_line += f" | State Changes: {', '.join(ev.get('object_state_changes'))}"
+                if ev.get("tempo"):
+                    fact_line += f" | Tempo: {ev.get('tempo')}"
+                if ev.get("suspicion_rating") and ev.get("suspicion_rating") != "NONE":
+                    fact_line += f" | Suspicion Rating: {ev.get('suspicion_rating')} ({ev.get('suspicion_reason', '')})"
+                if ev.get("recommendation"):
+                    fact_line += f" | Recommendation: {ev.get('recommendation')}"
+                combined_facts.append(fact_line)
 
         context_str = "\n".join(combined_facts)
         answer = self.vlm_client.generate_text_answer(query, context_str)

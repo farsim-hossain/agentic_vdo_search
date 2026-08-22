@@ -41,7 +41,8 @@ class VLMCache:
             
             parsed = json.loads(row["raw_json"])
             # Reject cached fallback error JSON so fresh analysis is performed
-            if any("error" in ev for ev in parsed.get("events", [])):
+            events = parsed.get("events", [])
+            if any("error" in ev for ev in events) or any("Video shot from" in ev.get("description", "") for ev in events):
                 return None
 
             return {
@@ -53,6 +54,11 @@ class VLMCache:
             }
 
     def save_observation(self, shot_id: str, video_id: str, raw_json_data: Dict[str, Any], summary_text: str):
+        # DO NOT save fallback error observations into SQLite database
+        events = raw_json_data.get("events", [])
+        if any("error" in ev for ev in events) or any("Video shot from" in ev.get("description", "") for ev in events):
+            return
+
         embed_engine = EmbeddingEngine.get_instance()
         text_vec = embed_engine.embed_text(summary_text)
         vec_bytes = text_vec.tobytes()

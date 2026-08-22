@@ -7,48 +7,39 @@ from src.config import settings
 from src.vlm.rate_limiter import VLMRateLimiter
 
 def clean_thinking_trace(text: str) -> str:
-    """Strip LLM internal reasoning/thinking traces (<think>...</think> or 'Here's a thinking process:...')."""
+    """Strip LLM internal reasoning/thinking traces (<think>...</think>, 'Here's a thinking process:...', or '*Self-Correction*:...')."""
     if not text:
         return ""
-    
-    # Strip <think>...</think> tags
-    text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL)
-    
-    # Strip "Here's a thinking process: ... Draft: ... Final Polish:"
-    if "thinking process" in text.lower() or "analyze user input" in text.lower():
-        markers = [
-            r'Final Polish:\s*(.*)',
-            r'Final Response:\s*(.*)',
-            r'Response:\s*(.*)',
-            r'Draft:\s*(.*)',
-        ]
-        for marker in markers:
-            match = re.search(marker, text, flags=re.DOTALL | re.IGNORECASE)
-            if match:
-                candidate = match.group(1).strip()
-                if candidate and not ("thinking process" in candidate.lower() or "analyze user input" in candidate.lower()):
-                    return candidate
 
-        # Fallback line filtering
-        lines = text.split("\n")
-        final_lines = []
-        in_thinking = False
-        for line in lines:
-            low = line.lower()
-            if any(k in low for k in ["thinking process", "analyze user input", "identify key constraints", "formulate response strategy", "drafting the response", "refine and format"]):
-                in_thinking = True
-                continue
-            if any(k in low for k in ["final polish:", "final response:", "based on the visual observations"]):
-                in_thinking = False
-                if "final polish:" in low or "final response:" in low:
-                    line = re.sub(r'^(final polish|final response):\s*', '', line, flags=re.IGNORECASE)
-            if not in_thinking:
-                final_lines.append(line)
-        cleaned = "\n".join(final_lines).strip()
+    # 1. Strip <think>...</think> tags
+    text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL | re.IGNORECASE)
+
+    # 2. Search for Final Answer or Final Output markers from the bottom up
+    matches = list(re.finditer(r'(?:Final Answer|Final Response|Final Output Construction|Final Output|Final decision|Revised Final|Final Polish):\s*(.*)', text, flags=re.IGNORECASE))
+    if matches:
+        last_match = matches[-1].group(1).strip()
+        cleaned = re.sub(r'\*[^*]+\*.*', '', last_match, flags=re.DOTALL).strip()
         if cleaned:
             return cleaned
+        return last_match.strip()
 
-    return text.strip()
+    # 3. Line-by-line filtering for internal monologue markers
+    lines = text.split("\n")
+    valid_lines = []
+    for line in lines:
+        l = line.strip().lower()
+        if any(l.startswith(k) for k in [
+            '*correction*', '*wait*', '*self-correction*', '*revised draft*', '*one more check*',
+            '*one last thought*', '*actually*', 'let\'s produce', 'let\'s stick', 'okay.', 'final decision:',
+            'thinking process', 'analyze user input', 'identify key constraints', 'formulate response strategy', 'drafting the response', 'refine and format'
+        ]):
+            continue
+        if any(k in l for k in ['thinking process', 'analyze user input', 'formulate response strategy', 'self-correction on']):
+            continue
+        valid_lines.append(line)
+
+    res = "\n".join(valid_lines).strip()
+    return res if res else text.strip()
 
 class GroqVLMClient:
     def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None):

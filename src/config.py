@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     # Groq API Configuration (supports GROQ_VLM_MODEL or GROQ_VLM)
     groq_api_key: str = Field(default="", env="GROQ_API_KEY")
     groq_vlm_model: str = Field(default="qwen/qwen3.6-27b")
-    groq_text_model: str = Field(default="qwen/qwen3.6-27b")
+    groq_text_model: str = Field(default="openai/gpt-oss-120b")
     
     # Rate Limiting
     vlm_min_request_interval: float = Field(default=60.0, description="Minimum seconds between Groq VLM API requests")
