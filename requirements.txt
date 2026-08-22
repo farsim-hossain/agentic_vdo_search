@@ -1,6 +1,9 @@
 # Groq API Client
 groq>=0.18.0
 
+# LlamaIndex Multimodal Core Framework
+llama-index-core>=0.14.0
+
 # Computer Vision & Video Processing
 opencv-python-headless>=4.9.0
 scenedetect[opencv]>=0.6.4

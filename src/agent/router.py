@@ -5,6 +5,7 @@ from src.video.processor import VideoProcessor
 from src.indexing.local_indexer import LocalIndexer, parse_query_timestamp_range
 from src.vlm.client import GroqVLMClient
 from src.vlm.cache import VLMCache
+from src.llamaindex.index_builder import LlamaVideoIndexBuilder
 
 class AgenticRouter:
     def __init__(self, api_key: Optional[str] = None):
@@ -12,6 +13,7 @@ class AgenticRouter:
         self.cache = VLMCache()
         self.vlm_client = GroqVLMClient(api_key=api_key)
         self.processor = VideoProcessor()
+        self.llama_builder = LlamaVideoIndexBuilder(self.indexer)
 
     def ensure_indexed(self, video_path: str, verbose_callback: Optional[Callable[[str], None]] = None) -> str:
         """Ensure video is ingested and local frame vectors & tags are stored in SQLite."""
@@ -44,7 +46,7 @@ class AgenticRouter:
         query: str,
         verbose_callback: Optional[Callable[[str], None]] = None
     ) -> Dict[str, Any]:
-        """Process user query using two-tier vector search and rate-limited Groq VLM priority queue."""
+        """Process user query using LlamaIndex node retrieval, two-tier vector search, and rate-limited Groq VLM."""
         video_id = self.ensure_indexed(video_path, verbose_callback=verbose_callback)
 
         # Direct Routing: Handle global summary intent
@@ -87,11 +89,10 @@ class AgenticRouter:
                     "observations": {"events": combined_events}
                 }
 
-        # 2. Perform CLIP visual frame vector search & timestamp matching
+        # 2. Perform LlamaIndex ImageNode retrieval & CLIP visual vector search
         if verbose_callback:
-            verbose_callback(f"Searching local CLIP frame embeddings for query: '{query}'...")
+            verbose_callback(f"Searching LlamaIndex ImageNodes and CLIP frame embeddings for query: '{query}'...")
 
-        # Get video duration for timestamp scaling
         v_duration = 0.0
         with self.indexer._get_conn() as conn:
             cursor = conn.cursor()
@@ -109,7 +110,7 @@ class AgenticRouter:
                 "source": "none"
             }
 
-        # If explicit timestamp range requested, filter ONLY shots overlapping target interval
+        # Filter ONLY shots overlapping target timestamp interval
         if ts_range:
             t_start, t_end = ts_range
             overlapping_candidates = []
@@ -123,7 +124,7 @@ class AgenticRouter:
 
         if verbose_callback:
             verbose_callback(
-                f"Selected {len(candidate_shots)} candidate shot(s) covering target query interval."
+                f"LlamaIndex selected {len(candidate_shots)} candidate ImageNode(s) covering target query interval."
             )
 
         # Collect facts across candidate shots, making AT MOST 1 new VLM call per query
@@ -137,15 +138,14 @@ class AgenticRouter:
             existing_obs = self.cache.get_observation(s_id)
             if existing_obs:
                 if verbose_callback:
-                    verbose_callback(f"Found cached VLM analysis for shot {s_id} [{shot_dict['start_ts']}-{shot_dict['end_ts']}].")
+                    verbose_callback(f"Found cached VLM analysis for ImageNode {s_id} [{shot_dict['start_ts']}-{shot_dict['end_ts']}].")
                 raw_json = existing_obs["raw_json"]
             else:
-                # Cap to at most 1 new VLM call per query to prevent rate limit delays
                 if vlm_calls_made >= 1:
                     continue
 
                 if verbose_callback:
-                    verbose_callback(f"Sending storyboard for shot {s_id} [{shot_dict['start_ts']}-{shot_dict['end_ts']}] to Groq VLM...")
+                    verbose_callback(f"Sending ImageNode storyboard for shot {s_id} [{shot_dict['start_ts']}-{shot_dict['end_ts']}] to Groq VLM...")
                 raw_json = self.vlm_client.analyze_storyboard(
                     storyboard_b64=shot_dict["storyboard_b64"],
                     shot_info=shot_dict,
@@ -185,7 +185,6 @@ class AgenticRouter:
             rows = cursor.fetchall()
 
         if not rows:
-            # If no cached observations exist yet, analyze first 2 shots
             with self.indexer._get_conn() as conn:
                 cursor = conn.cursor()
                 cursor.execute("SELECT * FROM shots WHERE video_id = ? ORDER BY shot_index ASC LIMIT 2", (video_id,))
