@@ -133,7 +133,7 @@ class VideoProcessor:
         return keyframes
 
     @staticmethod
-    def create_storyboard(keyframes: List[Keyframe], tile_size: Tuple[int, int] = (320, 180)) -> Image.Image:
+    def create_storyboard(keyframes: List[Keyframe], tile_size: Tuple[int, int] = (480, 270)) -> Image.Image:
         """Composite keyframe images into a single timestamped storyboard contact sheet."""
         if not keyframes:
             raise ValueError("No keyframes provided for storyboard creation")

@@ -73,14 +73,27 @@ class GroqVLMClient:
         prompt_text = (
             f"Analyze this video storyboard contact sheet representing a shot from {shot_info.get('start_ts', '00:00:00')} "
             f"to {shot_info.get('end_ts', '00:00:00')}.\n"
-            "Each frame has an embedded timestamp badge in the corner: [HH:MM:SS].\n"
-            "Return valid JSON only with a top-level key 'events' containing a list of observed visual events.\n"
-            "Each event object must include:\n"
-            "  - start_time: string timestamp\n"
-            "  - end_time: string timestamp\n"
-            "  - description: detailed visual description of what occurs\n"
-            "  - visible_objects: list of strings (objects, people, text visible)\n"
-            "  - action: string key action\n"
+            "Each frame has an embedded timestamp badge: [HH:MM:SS].\n"
+            "CRITICAL OBJECTIVITY & TEMPORAL ANOMALY CONSTRAINTS:\n"
+            "1. Do NOT assume any person is a security guard, police officer, or car owner based on uniform or clothing.\n"
+            "2. Inspect human hands and car/object components frame by frame: Are hands touching, pulling, unscrewing, or detaching any part?\n"
+            "3. Calculate DWELL TIME: How many seconds did the subject remain next to the car/object? Is the pace unusually brief, rapid, or abrupt?\n"
+            "4. FLAG SUSPICIOUS BEHAVIOR: Evaluate suspicion rating (HIGH, MEDIUM, LOW, NONE) and output a proactive Security Advisory note.\n"
+            "Return valid JSON only with a top-level key 'events' containing a list of event objects.\n"
+            "Each event object MUST include:\n"
+            "  - start_time: string timestamp [HH:MM:SS]\n"
+            "  - end_time: string timestamp [HH:MM:SS]\n"
+            "  - dwell_time_sec: float seconds spent near vehicle or object\n"
+            "  - description: detailed grounded visual description\n"
+            "  - visible_objects: list of strings (subjects, people, clothing colors, vehicles, accessories)\n"
+            "  - physical_interactions: list of strings (hand-to-object contact, pulling, detaching, or walking together)\n"
+            "  - object_state_changes: list of strings (part intact vs missing/detached, or 'None')\n"
+            "  - tempo: string entry/exit pace (e.g. rapid 3-second lean and departure)\n"
+            "  - suspicion_rating: string (HIGH, MEDIUM, LOW, NONE)\n"
+            "  - suspicion_reason: why the short dwell time or hasty pace is suspicious\n"
+            "  - recommendation: string security advice note (e.g. '⚠️ You should take a look at [00:00:15 - 00:00:19] due to a suspicious 3-second interaction near an unattended vehicle.')\n"
+            "  - activity_classification: string event category (e.g. Theft/Vehicle Tampering, Casual Walk, Conversation, Delivery, Shopping)\n"
+            "  - action: string key action summary\n"
             "  - confidence: float score between 0.0 and 1.0"
         )
 
@@ -129,6 +142,7 @@ class GroqVLMClient:
         """Use Groq text/vision model (qwen/qwen3.6-27b) for text reasoning based on visual facts."""
         system_instruction = (
             "You are a video analytics assistant. Provide ONLY a direct, grounded answer for the user citing timestamps [HH:MM:SS].\n"
+            "Include any proactive Security Advisory notes ('⚠️ Recommendation: You should take a look at [HH:MM:SS]...') whenever a suspicious 2-3 second dwell time or hasty approach/departure is present in the observations.\n"
             "CRITICAL: Do NOT output any internal thinking steps, reasoning process, or draft notes. Start directly with the answer."
         )
 
