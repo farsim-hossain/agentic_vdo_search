@@ -355,14 +355,30 @@ if temp_video_path and Path(temp_video_path).exists():
                             st.error(f"Error rendering storyboard: {e}")
                     st.markdown("<br>", unsafe_allow_html=True)
 
-    # TAB 3: Summary
+    # TAB 3: Summary & Event Log
     with tab3:
         st.markdown("<br>", unsafe_allow_html=True)
-        if st.button("Generate Narrative Summary", type="primary"):
-            with st.spinner("Synthesizing full video narrative..."):
+        if st.button("Generate Narrative Summary & Event Log", type="primary"):
+            with st.spinner("Synthesizing full video narrative & chronological window log..."):
                 selected_mode = "zero_llm" if "Zero-LLM" in engine_mode else "groq_vlm"
-                summary_text = router.summarize_video(temp_video_path, mode=selected_mode)
-                st.markdown(f'<div class="content-card">{summary_text}</div>', unsafe_allow_html=True)
+                res = router.generate_full_video_log(temp_video_path, mode=selected_mode)
+
+                st.markdown("##### Executive Narrative Overview")
+                st.markdown(f'<div class="content-card">{res["summary"]}</div>', unsafe_allow_html=True)
+
+                st.markdown("<br>", unsafe_allow_html=True)
+                st.markdown("##### Chronological Window-by-Window Event Log ('Time Talks' Analytics)")
+
+                if res.get("csv_payload"):
+                    st.download_button(
+                        label="📥 Download Event Log (.CSV / Excel)",
+                        data=res["csv_payload"],
+                        file_name=f"{video_id}_event_log.csv",
+                        mime="text/csv"
+                    )
+
+                if res.get("events_log"):
+                    st.dataframe(res["events_log"], use_container_width=True)
 
 else:
     st.markdown("""

@@ -1,4 +1,6 @@
 import json
+import csv
+import io
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Callable, Tuple
 from src.video.processor import VideoProcessor
@@ -260,3 +262,68 @@ class AgenticRouter:
 
         context = "\n".join(all_facts)
         return self.vlm_client.generate_text_answer("Summarize the main sequence of events in this video.", context)
+
+    def generate_full_video_log(self, video_path: str, mode: str = "zero_llm", verbose_callback: Optional[Callable[[str], None]] = None) -> Dict[str, Any]:
+        """Generate executive narrative summary AND a chronological top-to-bottom window event log with CSV export payload."""
+        video_id = self.ensure_indexed(video_path, verbose_callback=verbose_callback)
+        summary_text = self.summarize_video(video_path, mode=mode, verbose_callback=verbose_callback)
+
+        with self.indexer._get_conn() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM shots WHERE video_id = ? ORDER BY shot_index ASC", (video_id,))
+            shot_rows = cursor.fetchall()
+
+        events_log = []
+        for row in shot_rows:
+            s_idx = row["shot_index"] + 1
+            s_start_ts = row["start_ts"]
+            s_end_ts = row["end_ts"]
+            s_start_sec = row["start_sec"]
+            s_end_sec = row["end_sec"]
+            dwell = max(1.5, round(s_end_sec - s_start_sec, 1))
+
+            tags = json.loads(row["tags_json"] or "[]")
+            obj_str = ", ".join(tags) if tags else "objects, surrounding scene"
+
+            # Compute "Time Talks" pace analytics
+            if dwell <= 4.0:
+                time_talks_pace = f"⚡ Rapid {dwell}s Dwell (Hasty Pace)"
+            elif dwell <= 10.0:
+                time_talks_pace = f"⏱️ Moderate {dwell}s Duration"
+            else:
+                time_talks_pace = f"⏳ Prolonged {dwell}s Duration"
+
+            # Check if shot has loitering / suspicious interaction
+            has_vehicle = any(t in tags for t in ["car", "motorcycle", "vehicle"])
+            if has_vehicle and dwell <= 5.0:
+                sec_rec = f"⚠️ Recommendation: Take a look at [{s_start_ts} - {s_end_ts}] due to brief {dwell}s dwell time near vehicle."
+            else:
+                sec_rec = "Normal activity pattern."
+
+            activity_desc = f"Visual detection of {obj_str} with {dwell}s segment duration."
+
+            events_log.append({
+                "Shot #": f"Shot #{s_idx}",
+                "Start Time": s_start_ts,
+                "End Time": s_end_ts,
+                "Duration (s)": f"{dwell}s",
+                "Detected Objects": obj_str,
+                "Time Talks (Pace)": time_talks_pace,
+                "Visual Activity": activity_desc,
+                "Security Recommendation": sec_rec
+            })
+
+        # Build CSV payload string for Excel export (with UTF-8 BOM '\ufeff' so Excel auto-splits into columns)
+        output = io.StringIO()
+        output.write('\ufeff')
+        if events_log:
+            writer = csv.DictWriter(output, fieldnames=list(events_log[0].keys()))
+            writer.writeheader()
+            writer.writerows(events_log)
+        csv_payload = output.getvalue()
+
+        return {
+            "summary": summary_text,
+            "events_log": events_log,
+            "csv_payload": csv_payload
+        }
