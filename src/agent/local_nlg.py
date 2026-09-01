@@ -50,7 +50,7 @@ class LocalNaturalLanguageGenerator:
         if is_suspicious_event:
             suspicion_rating = "MEDIUM" if dwell_time >= 3.0 else "HIGH"
             suspicion_reason = f"Brief {dwell_time}-second interaction detected during flagged security query."
-            rec_note = f"⚠️ Security Advisory: You should take a look at [{start_ts} - {end_ts}] due to the brief {dwell_time}-second event duration."
+            rec_note = f"Security Advisory: You should take a look at [{start_ts} - {end_ts}] due to the brief {dwell_time}-second event duration."
         else:
             suspicion_rating = "NONE"
             suspicion_reason = "Normal activity with standard movement pace."

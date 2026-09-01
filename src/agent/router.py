@@ -287,16 +287,16 @@ class AgenticRouter:
 
             # Compute "Time Talks" pace analytics
             if dwell <= 4.0:
-                time_talks_pace = f"⚡ Rapid {dwell}s Dwell (Hasty Pace)"
+                time_talks_pace = f"Rapid {dwell}s Dwell (Hasty Pace)"
             elif dwell <= 10.0:
-                time_talks_pace = f"⏱️ Moderate {dwell}s Duration"
+                time_talks_pace = f"Moderate {dwell}s Duration"
             else:
-                time_talks_pace = f"⏳ Prolonged {dwell}s Duration"
+                time_talks_pace = f"Prolonged {dwell}s Duration"
 
             # Check if shot has loitering / suspicious interaction
             has_vehicle = any(t in tags for t in ["car", "motorcycle", "vehicle"])
             if has_vehicle and dwell <= 5.0:
-                sec_rec = f"⚠️ Recommendation: Take a look at [{s_start_ts} - {s_end_ts}] due to brief {dwell}s dwell time near vehicle."
+                sec_rec = f"Security Recommendation: Take a look at [{s_start_ts} - {s_end_ts}] due to brief {dwell}s dwell time near vehicle."
             else:
                 sec_rec = "Normal activity pattern."
 
